@@ -1,0 +1,106 @@
+import requests
+import pandas as pd
+import time
+from datetime import datetime
+
+###############################################
+####### Set Up Variables ######################
+###############################################
+
+start = time.time()
+myWorkfrontUrl = 'https://XXXXXXXXXXXXXXXXXXX.my.workfront.com/'
+myWorkfrontVersion = 'attask/api/v13.0/'
+myWorkfrontObjectType = 'assignment'
+myPublicationLocation = 'XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX\\'
+myOutputFileName = 'AssignmentReport'
+
+
+################################################
+############ Set the Query Parameters ##########
+################################################
+
+headers = {
+    'apiKey': 'XXXXXXXXXXXXXXXXXXXXXXXXXXX',
+}
+
+columns = ('projectID, taskID, assignedTo:name, ' +
+           'role:name, workRequired')
+
+params = (
+    ('fields', columns),
+)
+
+## Identify the number of records we're returning and need to loop through
+## Workfront has a 2k record limit per pull
+numRecords = requests.get((myWorkfrontUrl + myWorkfrontVersion + myWorkfrontObjectType + '/report'), 
+                          headers=headers, params=params)
+numRecords = numRecords.json()['data']['dcount_ID']
+limit = numRecords
+
+print(str(limit) + ' Records')
+
+
+################################################
+################# Loop #########################
+################################################
+
+reportData = [] ##initialize a list to put records into 
+counter = 0
+
+while counter <= limit:
+    
+    params = (
+    ('fields', columns),
+    ('$$LIMIT', '2000'),
+    ('$$FIRST', counter),
+    )
+    
+    ## Sort the records, otherwise it gets messy
+    
+
+    response = requests.get((myWorkfrontUrl + myWorkfrontVersion + myWorkfrontObjectType + '/search'), 
+                            headers=headers, params=params)
+    response_json = response.json()
+    
+    for i in response_json.get('data'):
+        tempList = []
+        try:
+            tempList.append(i['projectID'])
+        except:
+            tempList.append(None)
+        try:
+            tempList.append(i['taskID'])
+        except:
+            tempList.append(None)
+        try:
+            tempList.append(i['assignedTo']['name'])
+        except:
+            tempList.append(None)
+        try:
+            tempList.append(i['role']['name'])
+        except:
+            tempList.append(None)
+        try:
+            tempList.append(i['workRequired'])
+        except:
+            tempList.append(None)
+        reportData.append(tempList)
+        
+    counter += 2000
+
+end = time.time()
+print(str(round(end - start)) + ' Seconds')
+
+##########################################################
+######################### Export #########################
+##########################################################
+
+df = pd.DataFrame(reportData, columns = ['Project ID', 
+                                         'Task ID',
+                                         'Assigned To User', 'Assigned to Role Name',
+                                         'Assigned Work Required'
+                                         ])
+
+df['Data Refresh Date'] = datetime.today().strftime('%Y-%m-%d')
+
+df.to_csv(myPublicationLocation + myOutputFileName + '.csv', index=False)
